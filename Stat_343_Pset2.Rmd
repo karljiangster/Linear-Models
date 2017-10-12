@@ -1,0 +1,12 @@
+---
+title: "Stat 343 HW 2"
+author: "Karl Jiang"
+date: "October 12, 2017"
+output: pdf_document
+---
+
+#1) Prostate 
+```{r, include = FALSE}
+library("alr4")
+
+```

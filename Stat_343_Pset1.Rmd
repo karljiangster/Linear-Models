@@ -1,0 +1,242 @@
+---
+title: "Stat 343 Pset 1"
+author: "Karl Jiang"
+date: "October 7, 2017"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, include=FALSE}
+library(alr4)
+library(knitr)
+```
+
+#2.2) Forbe's Boiling Points 
+```{r}
+data("Forbes")
+forbes = Forbes
+```
+
+
+##2.2.1) 
+```{r}
+forbes$mu1 = 1 / ( 5 / 9 * forbes$bp + 255.37)
+plot(forbes$lpres ~ forbes$mu1)
+```
+
+From the plot, it only look like point 12 deviates slightly from the linear relationship. 
+
+##2.2.2) 
+```{r}
+lm_mu1 = lm(lpres ~ mu1, data = forbes)
+s_mu1 = summary(lm_mu1)
+print(s_mu1)
+```
+
+Interpretation: under this SLR model, for every increase in $\mu_1$, we expect a decrease of -218968.41 in lpres. 
+
+From the SLR, we see that $\mu_1$ has a significant coefficient term, as the probabillity of this coefficient estimate occuring under $H_0$ that $\beta_1 = 0$ is basically $0$. That is, we reject the hypothesis that $\beta_1 = 0$. The $R^2$ between $mu_1$ and $log(Lpres)$ is very close, suggesting a strong linear relationship between the two. 
+
+##2.2.3) Model Comparison 
+
+```{r}
+mdl_forbes = lm(lpres ~ bp, data = forbes)
+plot(mdl_forbes$fitted.values ~ forbes$bp, col = 1, pch = 4,
+     main = "Forbes (Black X) vs. Clasius (Red Circle)",
+     xlab = "Temp", ylab = "Lpres")
+points(lm_mu1$fitted.values ~ forbes$bp, col = 2, pch = 1)
+
+s_forbes = summary(mdl_forbes)
+s_forbes
+```
+
+The plots and regression summaries of Clausius' and Forbes' model proposal are nearly identical. (Nearly all the same fitted points --> same correlation squared, have significant coefficients, etc.) Therefore, no one model is preferred over the other. That being said, for simplicity, Forbes model is more interpretable than Clausius (though Clausius' model is still quite interpretable.) 
+
+#2.8 Scale Invariance 
+
+##2.8.1) 
+
+If $\textbf{X}_c = c\textbf{X}$ then $x_{i, c} = cx_i$ and $\bar{x}_c = c\bar{x}$
+
+$$
+SXY_c = \sum_{i=1}^{N} (x_{i, c} - \bar{x}_c)(y_i - \bar{y}) = \sum_{i=1}^{N} c(x_i  - \bar{x}) (y_i - \bar{y}) = cSXY
+$$
+
+$$
+SXX_c = \sum_{i=1}^{N} (x_{i, c} - \bar{x}_c)^2 = \sum_{i=1}^{N} (c(x_i  - \bar{x}))^2 = c^2 \sum_{i=1}^{N} (x_i  - \bar{x})^2 = c^2 SXX
+$$
+
+
+Therefore, $\hat{\beta}_{1,c} = \frac{SXY_c}{SXX_c} = \frac{SXY}{cSXX} = \frac{1}{c}\hat{\beta}_1$ 
+$\\$
+
+and $\hat{\beta}_{0,c} = \bar{y}_c - \hat{\beta}_{1,c} \bar{x}_c = \bar{y} - (\frac{1}{c}\hat{\beta}_1)(c\bar{x}) = \bar{y} - \hat{\beta}_1 \bar{x} = \hat{\beta}_0$
+
+$\\$
+For $\hat{\sigma}_c$ and $R^2$, we need to know $RSS_c$: 
+
+$$
+RSS_c = \sum_{i=1}^{N} (y_i - \hat{y}_{i, c})^2 = 
+\sum_{i=1}^{N} (y_i - (\hat{\beta}_{0,c} + \hat{\beta}_{1,c}x_{i,c}))^2 =  
+\sum_{i=1}^{N} (y_i - (\hat{\beta}_0 + \frac{1}{c}\hat{\beta}_1cx_i) )^2 = 
+RSS
+$$
+
+Then it follows that 
+
+$$\hat{\sigma}_c^2 = \frac{RSS_c}{n-2} = \frac{RSS}{n-2} = \hat{\sigma}^2$$
+$$R_c^2 = 1 - RSS_c / SYY = 1 - RSS / SYY = R^2$$
+And the t test for zero slope is 
+$$ 
+\frac{\hat{B}_{1,c}}{SE(\hat{B}_{1,c}) } = \frac{\frac{1}{c}\hat{B}_1}{\frac{\hat{\sigma}_c}{\sqrt{SXX_c} }} = 
+\frac{\frac{1}{c}\hat{B}_1}{\frac{\hat{\sigma}}{c\sqrt{SXX} } } = 
+\frac{\hat{B}_1}{\frac{\hat{\sigma}}{\sqrt{SXX} } } 
+$$
+Which is the t statistic for the original case. So the t test is not affected by this change. 
+
+$\\\\$
+In summary: 
+$$\hat{\beta}_{0,c} = \frac{1}{c}\hat{\beta}_1$$
+$$\hat{\beta}_{0,c} = \hat{\beta}_0$$
+
+$$\hat{\sigma}_c = \hat{\sigma}$$
+$$R_c^2 = R^2$$
+
+$$ 
+\frac{\hat{B}_{1,c}}{ SE(\hat{B}_{1,c}) } = 
+\frac{\hat{B}_1}{ SE(\hat{B}_1) } 
+$$
+
+##2.8.2) 
+Similar to 2.8.1), let $y_{i,d} = dy_i$. Then 
+
+$$
+SXY_d = \sum_{i=1}^{N} (y_{i, d} - \bar{y}_d)(x_i - \bar{x}) = \sum_{i=1}^{N} d(x_i  - \bar{x}) (y_i - \bar{y}) = dSXY
+$$
+
+
+$SXX$ remains undhanged as it is not dependent on $Y$. 
+
+
+$$
+SYY_d = \sum_{i=1}^{N} (y_{i, d} - \bar{y}_d)^2 = \sum_{i=1}^{N} (d(y_i  - \bar{y}))^2 = d^2 \sum_{i=1}^{N} (y_i  - \bar{y})^2 = d^2 SYY
+$$
+
+Therefore, $\hat{\beta}_{1,d} = \frac{SXY_d}{SXX} = \frac{dSXY}{SXX} = d\hat{\beta}_1$ 
+$\\$
+
+and $\hat{\beta}_{0,d} = \bar{y}_d - \hat{\beta}_{1,d} \bar{x}_d = d\bar{y} - (d\hat{\beta}_1)(\bar{x}) = d(\bar{y} - \hat{\beta}_1 \bar{x}) = d\hat{\beta}_0$
+
+$\\$
+For $\hat{\sigma}_d$ and $R^2$, we need to know $RSS_d$: 
+
+$$
+RSS_d = \sum_{i=1}^{N} (y_{i,d} - \hat{y}_{i, d})^2 = 
+\sum_{i=1}^{N} (dy_i - (\hat{\beta}_{0,d} + \hat{\beta}_{1,d}x_{i}))^2 =
+$$
+
+$$
+\sum_{i=1}^{N} (dy_i - (d\hat{\beta}_0 + d\hat{\beta}_1x_i) )^2 = 
+d^2\sum_{i=1}^{N} (y_i - (\hat{\beta}_0 + \hat{\beta}_1x_i) )^2 =
+d^2RSS
+$$
+
+Then it follows that 
+
+$$\hat{\sigma}_d^2 = \frac{RSS_d}{n-2} = d^2\frac{RSS}{n-2} = d^2\hat{\sigma}$$
+$$R_d^2 = 1 - RSS_d / SYY_d = 1 - dRSS / dSYY = R^2$$
+
+
+And the t test for zero slope is 
+$$ 
+\frac{\hat{B}_{1,d}}{SE(\hat{B}_{1,d}) } = \frac{d\hat{B}_1}{\sqrt{\frac{\hat{\sigma}_d}{ SXX }}} = 
+\frac{d\hat{B}_1}{\frac{\hat{d\sigma}}{\sqrt{SXX} } } = 
+\frac{\hat{B}_1}{\frac{\hat{\sigma}}{\sqrt{SXX} } } 
+$$
+
+And so the t test remains undhanged. 
+
+$\\\\$
+In summary: 
+$$\hat{\beta}_{1,d} = d\hat{\beta}_1$$
+$$\hat{\beta}_{0,d} = d\hat{\beta}_0$$
+
+$$\hat{\sigma}_d = d^2\hat{\sigma}$$
+$$R_d^2 = R^2$$
+
+$$ 
+\frac{\hat{B}_{1,d}}{ SE(\hat{B}_{1,d}) } = 
+\frac{\hat{B}_1}{ SE(\hat{B}_1) } 
+$$
+
+#2.7) 
+
+##2.7.1) 
+In class, we proved that the vector of coefficients was $\hat{\beta} = (X^TX)^{-1}X^Ty$ for data matrix X. Now we justs have a special case where $X$ is just a vector, giving us 
+
+$$
+\hat{\beta} = \frac{x^Ty}{x^Tx} = \frac{\sum_{i=1}^n x_iy_i}{\sum_{i=1}^{N} x_i^2}
+$$
+
+The expected value is
+
+$$
+\mathbb{E}[\hat{\beta}] = 
+\frac{\sum_{i=1}^n \mathbb{E}[x_iy_i]}{\sum_{i=1}^{N} x_i^2} =
+\frac{\sum_{i=1}^n x_i\mathbb{E}[y_i]}{\sum_{i=1}^{N} x_i^2} =
+\frac{\sum_{i=1}^n x_i(\beta x_i)}{\sum_{i=1}^{N} x_i^2} = 
+\beta \frac{\sum_{i=1}^n x_i^2}{\sum_{i=1}^{N} x_i^2} = 
+\beta
+$$
+
+So the least squares estimator is unbiased 
+$\\$
+Assuming that the errors are i.i.d The variance is
+
+$$
+Var(\beta) = Var( \frac{\sum_{i=1}^n x_iy_i}{\sum_{i=1}^{N} x_i^2} )=
+\frac{\sum_{i=1}^n x_i^2Var[y_i]}{(\sum_{i=1}^{N} x_i^2)^2} = 
+\frac{\sum_{i=1}^n x_i^2 \sigma^2}{(\sum_{i=1}^{N} x_i^2)^2} = 
+\frac{\sigma^2}{\sum_{i=1}^{N} x_i^2}
+$$
+
+In SLR, the estimator for $\sigma$ is the average of the squared residuals over the degrees of freedom. Using a similar method, is estimator for $\hat{\sigma}$ would be $\frac{RSS}{n-1}$ where $RSS = \sum_{i=1}^n (y_i - \beta x_i)^2$ The degrees of freedom is $n-1$ because we only need to estimate one parameter $\beta$. 
+
+
+##2.7.3) Snake 
+
+```{r}
+data("snake")
+df = 16
+alpha = 0.05
+p = c(alpha / 2, 1 - alpha/2)
+
+mdl = lm(Y ~ X - 1, data = snake)
+sm = summary(mdl)
+
+#confint(mdl)
+t_quantiles = qt(p, df = 16)
+
+ci = sm$coefficients[1,1] + sm$coefficients[1,2] * t_quantiles
+print('The 95% confidence interval for beta is:')
+print(ci)
+```
+
+To test the hypothesis that the intercept is 0: 
+```{r}
+mdl_i = lm(Y ~ X, data = snake)
+kable( summary(mdl_i)$coeff ) 
+```
+
+Because the p value of the t statistic from the intercept term is not significant, we fail to reject the null hypothesis that the intercept is 0.
+
+##2.7.4) 
+
+The residuals are: 
+```{r}
+plot(mdl$residuals)
+abline(a = sum(mdl$residuals), b = 0)
+```
+
+The main assumption is that the errors are i.i.d - the residual plot doesn't have a clear pattern, so the independence assumption is reasonable. (To further access the adequacy of the model, we can also look at the histogram of the residuals.)  
