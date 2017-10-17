@@ -8,5 +8,187 @@ output: pdf_document
 #1) Prostate 
 ```{r, include = FALSE}
 library("alr4")
-
+library("faraway")
+library("knitr")
+library("ellipse")
+data("prostate")
 ```
+
+```{r}
+sigmas= c() 
+r2 = c() 
+
+vars = c("lcavol", "lweight", "svi", "lbph", "age", "lcp", "pgg45", "gleason")
+for(i in 1:length(vars)){
+  mdl = lm(lpsa ~ . , data = prostate[, c("lpsa", vars[1:i] ) ])
+  s = summary(mdl)
+  sigmas = c(sigmas, s$sigma) 
+  r2 = c(r2, s$r.squared)
+}
+
+plot(sigmas, main = "sigma", xlab = "number of predictors")
+plot(r2, main = "R squared", xlab = "number of predictors")
+#plot(sigmas ~ r2, main = "sigma_hat vs R^2")
+```
+
+Non surprisngly, as we add more predictors into our model, $R^2$ increases and $\hat{\sigma}$ (basically RSS) decreases. Thus, a higher $R^2$ is indicative of a lower $\hat{\sigma}$. This makes sense since $R^2$ increases as the RSS decreases, and $\hat{\sigma}$ decreases. 
+
+#2) Biased Estimators 
+
+```{r}
+mdl_full = lm(lpsa ~ . ,data = prostate)
+full_coeffs = summary(mdl_full)$coefficients
+full_coeffs = full_coeffs[2:nrow(full_coeffs), ]
+#kable(full_coeffs, digits = 3, caption = "Full model")
+
+#now for testing individually 
+s_coeffs = full_coeffs
+for(i in 1:length(vars)){
+  mdl_simple = lm(lpsa ~ ., data = prostate[, c("lpsa", vars[i])])
+  s_coeffs[ vars[i], ] = summary(mdl_simple)$coeff[2, ]
+}
+#kable(s_coeffs, digits = 3, caption = "SLR estimates")
+
+m = cbind(s_coeffs[, c(1,4)], full_coeffs[, c(1,4)])
+colnames(m) <- c("Est. SLR", "Pr SLR", "Est. MLR", "Pr MLR")
+kable( m, caption = "SLR v MLR head to head" , digits = 3)
+```
+
+We get different estimates and p values. While all of the covariates seem to have a positive correlation with the dependent variable, in the MLR setting they do not. In addition, while all the covariates appeared to have sigificant p values (at the .1 level), many do not in the MLR setting. This suggests that there are confounding variables in the model. 
+
+#3) Confidence Intervals 
+
+##a) Age, alone 
+```{r}
+p_95 = c(0.025, 0.975) 
+s_full = summary(mdl_full)
+b_age = s_full$coefficients["age", "Estimate"]
+se_age = s_full$coefficients["age", "Std. Error"]
+ci_age95 = b_age + qt(p = p_95, df = nrow(prostate) - length(var)) * se_age
+
+p_90 = c(0.05, 0.95)
+ci_age90 = b_age + qt(p = p_90, df = nrow(prostate) - length(var)) * se_age
+
+ci_age = matrix(c(ci_age95, ci_age90), nrow = 2, byrow= TRUE)
+rownames(ci_age) = c("95%", "90%")
+colnames(ci_age) = c("low", "high")
+kable(ci_age, caption = "CI for age")
+
+anova(mdl_full)
+```
+
+Note that 0 does not fall in the 90% confidence interval, but is within the 95% confidence interval. We know that from oue Statistical Theory and Methods courses that if a value $v$ does not lie within the $1 - \alpha$ CI for some observed random variable drawn from $X$, then $\mathbb{P}(|X| > v) < \alpha$ (and vice versa if the value is within the $1 - \alpha$ CI). Therefore, we know that the p value must be between 0.05 and 0.1. Looking back at the table of the coefficeints, we see that indeed the p value (0.08) is within these bounds. 
+
+##b) The joint CI 
+```{r}
+#age and lbph
+plot(ellipse(mdl_full, which = c(4, 5)), type="l", main = "Joint CI, age and lbph")
+points(0, 0)
+points(mdl_full$coef[4], mdl_full$coef[5],pch=18)
+```
+
+The location of the origin tests the null hypothesis $H_0:$ $\beta_{age} = \beta_{lbph} = 0$. Because the point (0,0) is within the joint CI, we fail to reject $H_0$ at the $\alpha = 0.05$ level. 
+
+#4) SAT
+
+##a)
+
+```{r}
+data("sat")
+mdl_salary = lm(total ~ expend + salary + ratio, data = sat) 
+summary(mdl_salary)
+```
+
+Using $\alpha = 0.05$, we fail to reject to $H_0: \beta_{salary} = 0$ as the p value for the observed $\hat{\beta}_{salary}$ is 0.0667. 
+$\\$
+We do reject $H_0: \beta_{salary} = \beta_{expend} = \beta_{ratio} = 0$ as the p value from the F statistic is 0.01209 < $\alpha$ 
+
+##b) Adding takers 
+ 
+```{r}
+mdl_take = lm(total ~ expend + salary + ratio + takers, data = sat) 
+summary(mdl_take)
+```
+
+We reject the test $H_0: \beta_{takers} = 0$ as the p value for the observed coefficient is essentially 0 ( < 0.05 easily). 
+
+$\\$
+
+Comparing to the F test: 
+```{r}
+anova(mdl_salary, mdl_take)
+```
+
+Note that the t statistic for takers is -12.559. Squaring that gives ~ 157.7, which is the F statistic in ANOVA. (In addition to showing this in lecture, this intuitively this makes sense as the a t statistic is a standard normal divided by a chi sq over its degrees of freedom. Since the standard normal squared is a chi squared with df = 1, squaring a t distributed random variable will give a ratio of chi squared over the degrees of freedom, which is the F distributed random variable.) 
+
+#5) MLE 
+
+##a) likelihood
+
+$$
+f(y; X, \beta; \sigma^2 ) = \prod_{i = 1}^n \frac{1}{\sqrt{2\pi\sigma^2}}exp(\frac{-(y_i - \mathbf{ x_i^T\beta})}{2\sigma^2})
+$$
+Let the log likelood $l$ be 
+
+$$
+\begin{aligned}
+l(y; X; \beta; \sigma^2) = log(f) = \\ n*log(\frac{1}{\sqrt{2\pi\sigma^2}}) -\frac{1}{2\sigma^2} \sum_{i = 1}^n (y_i - \mathbf{x_i^T\beta})^2 = \\
+-\frac{n}{2}log(2\pi) -\frac{n}{2}log(\sigma^2) -\frac{1}{2\sigma^2} \sum_{i = 1}^n (y_i - \mathbf{x_i^T\beta})^2
+\end{aligned}
+$$
+This will be used for derivatives
+
+##b) Partials 
+
+Partial with respect to $\beta$: 
+$$
+\begin{aligned}
+\frac{\partial l}{\partial \beta} = -\frac{1}{2\sigma^2} \frac{\partial}{\partial \beta}(\mathbf{y - X\beta)^T(y - X\beta)} = \\
+-\frac{1}{2\sigma^2} \big( 2(\mathbf{y - X\beta)^T (-X) } = \\
+\frac{1}{\sigma^2}\mathbf{ (y - X\beta)^TX }
+\end{aligned}
+$$
+
+Note that we change the squared sum of residuals into matrix notation. 
+$\\$
+With respect to $\sigma^2$: 
+
+$$
+\begin{aligned}
+\frac{\partial l}{\partial \sigma^2} = -\frac{n}{2\sigma^2} + 
+\frac{1}{2\sigma^4} \sum_{i = 1}^n (y_i - \mathbf{x_i^T\beta})^2
+\end{aligned} 
+$$
+
+##c) MLE $\beta$
+We first find the inflection point by setting the partial to 0: 
+
+$$
+\begin{aligned}
+&\implies \frac{1}{\sigma^2}\mathbf{ (y - X\hat{\beta})^TX } = 0 \\
+&\implies \mathbf{y^TX - \hat{\beta^T} X^TX} = 0 \\
+&\implies \mathbf{y^TX = \hat{\beta^T} X^TX} \\
+&\implies \mathbf{X^Ty = X^TX \hat{\beta} } \\
+&\implies \mathbf{\hat{\beta} = (X^TX)^{-1}X^Ty} 
+\end{aligned}
+$$
+
+which is exactly the OLS estimator. Taking the second derivative with respect to $\beta$ gives a value which is < 0, implying that this point is indeed a maximum. That is, $\hat{\beta}$ is indeed the MLE. 
+
+##d) MLE $\sigma^2$
+
+Again, we  first find the inflection point by setting the partial (with respect to $\sigma^2$) to 0: 
+
+$$
+\begin{aligned}
+&\implies -\frac{n}{2\hat{ \sigma^2} }+ 
+\frac{1}{2\hat{ \sigma^4} }\sum_{i = 1}^n (y_i - \mathbf{x_i^T\beta})^2 = 0 \\
+&\implies \frac{n}{\hat{ \sigma^2} } = \frac{1}{\hat{ \sigma^4} } \sum_{i = 1}^n (y_i - \mathbf{x_i^T\beta})^2 \\
+&\implies n\hat{ \sigma }^2 = \sum_{i = 1}^n (y_i - \mathbf{x_i^T\beta})^2 \\
+&\implies \hat{ \sigma }^2 = \frac{1}{n} \sum_{i = 1}^n (y_i - \mathbf{x_i^T\beta})^2 \\
+&= \frac{RSS}{n}
+\end{aligned} 
+$$
+A simple second derivative test will show that this indeed the MLE. 
+$\\\\$
+This is different from the $\frac{RSS}{n - p}$ we went over in class. This is because (as shown in lecture) if $\beta$ is unknown, $\mathbb{E}[\hat{\sigma^2}] = \frac{n - p}{n} \sigma^2$, so to make the estimator unbiased, we divide by $n - p$ instead of $n$.  
