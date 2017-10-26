@@ -1,0 +1,76 @@
+---
+title: "Stat 343 Pset 3"
+author: "Karl Jiang"
+date: "October 23, 2017"
+output: pdf_document
+---
+
+```{r, include = FALSE}
+library(alr4)
+library(faraway)
+```
+
+#1) Snail Data 
+
+##a) 
+```{r}
+data("snail")
+xtabs(water ~ temp + humid, snail) / 4
+```
+
+It'd be best if we didn't. But technically, we could by using some heuristic based on the taking the average from the water content for 20 - 30 temp and 45 - 75 humidity (since they are the closest to 25C and 60%H). So our prediction using this heuristic would be $\frac{72.5 + 81.5 + 69.5 + 78.25}{4}$ = 75.43
+
+But because of how far temp 25 C and 60% are from the known data, we would have a high standard error in our prediction. Moreover, inference on our prediction might not be possible. Therefore, it's best to keep our predictions for the temp and humidity levels that we have data from. 
+
+
+##b) 
+```{r}
+snail_model = lm(water ~ temp + humid, snail)
+newdata = data.frame(temp = c(25), humid = c(60))
+bad_prediction = predict(snail_model, 
+                         newdata = newdata, 
+                         interval = "prediction")
+bad_prediction
+```
+
+##c) 
+```{r}
+olddata = data.frame(temp = c(30), humid = c(75))
+good_prediction = predict(snail_model, 
+                         newdata = olddata, 
+                         interval = "confidence")
+good_prediction
+```
+
+In comparison to our prediction in a) (78.25), our prediction is higher. The main advantage of using the prediction from a) is when we know that there are distinct number of classes for our (categorical) variables. On the other hand, if we are trying to interpolate (eg. predict temp = 25C and humid = 60%), then using regression might be more advantageous for these continuos variables. 
+
+##d) 
+
+The intercept represents the predicted response when temp = 0C and humid = 0%. Alternatively, it could be the response when temp = 2.58272C and humid = 1%. In this sense, our answer is no unique. Any vector in the span of $(2.58272temp, humid)$ will result in the intercept term of the linear model.
+$\\$
+No, I do not think the intercept represents a reasonable prediction for the values of the predictors I proposed. Because our data comes from > 20C temp and > 45% humidity we are overextrapolating severely using (0,0) and (2.58, 1). 
+
+##e) 
+
+Using our model: 
+```{r}
+snail_model
+```
+
+$ 80 = 52.6108 -0.1833(25C) + 0.4735*humid $
+After some algebra, humid = 67.52207%. 
+
+#2) Deaths 
+
+##a) 
+```{r}
+plot( mdeaths, main = "Deaths" )
+```
+
+Based on the plot, deaths occur the most during the winter months (December, January)
+
+##b) 
+```{r}
+
+
+```
