@@ -1,0 +1,273 @@
+---
+title: "Stat 343 Pset 4"
+author: "Karl Jiang"
+date: "October 29, 2017"
+output: pdf_document
+---
+
+
+```{r, include = FALSE}
+library(alr4)
+library(faraway)
+library(knitr)
+library(splines)
+```
+
+#1) Prostate 
+
+##a) Forward Elimination 
+```{r}
+data("prostate")
+
+get_sig_lowest_predictor = function(df, vars, alpha){
+  cols = colnames(df)
+  unused = cols[ !cols %in% vars ]
+  
+  best = ""
+  lowest_p = 1
+  
+  for(i in 1:length( unused ) ){
+    v = unused[i]
+    
+    preds = c(vars, v)
+    mdl = lm(lpsa ~ . , data = df[, preds])
+    s = summary(mdl)
+
+    if(check_all_sig(s)){
+      prob = s$coeff[v, 4]
+      if(lowest_p > prob){
+        best = v
+        lowest_p = prob
+      }    
+    }
+  }
+  return(best)
+}
+
+
+print_added = function(s, v){
+  print( sprintf("Variable Added: %s", v) )
+  print( sprintf("P value: %f", s$coeff[v, 4] ) )
+  print( sprintf("R^2 after adding: %f", s$r.squared) ) 
+}
+
+check_all_sig = function(s){
+  nc = nrow(s$coeff)
+  if(sum(s$coeff[2:nc, 4] > alpha)){
+    #print(s$coeff[2:nc, 4])
+    return(FALSE)  
+  }
+  return(TRUE)
+}
+
+forward_elim = function(df, y, alpha){
+  vars = c(y) 
+  go = TRUE 
+  while( go ){
+    var = get_sig_lowest_predictor(df, vars, alpha)
+    #print(var)
+    if(var != ""){
+      vars = c(vars, var)
+      s = summary(lm(lpsa ~ ., data = df[,vars]))
+      print_added(s, var)
+    }
+    else{ go = FALSE}
+  }
+  return(vars)
+}
+```
+
+```{r}
+y = "lpsa"
+vars = c(y)
+alpha = 0.05
+
+vars_forward = forward_elim(prostate, y, 0.05)
+df_forward = prostate[, c(vars_forward)]
+mdl_forward = lm(lpsa ~ ., data = df_forward)
+s_forward = summary(mdl_forward)
+print(s_forward)
+```
+
+##b) Backwards Elimnation
+
+```{r}
+backward_elimination = function(df, alpha){
+  go = TRUE 
+  vars = colnames(df)
+  while(go){
+    mdl = lm(lpsa ~ ., data = df[, vars])
+    var = get_max_p_value(mdl, alpha)
+    if(var != ""){
+      vars = vars[!vars %in% var]
+      print(vars)
+    }
+    else{
+      go = FALSE 
+    }
+  }
+  return(vars)
+}
+
+get_max_p_value = function(mdl, alpha){
+  #returns predictor of corresponding to max p value that is > alpha  
+  # o.w. returns empty string ""
+  s = summary(mdl)
+  
+  p = nrow(s$coeff)
+  var_rm = names( which.max( s$coeff[2:p, 4] ) ) 
+  #print(var_rm)
+  #print(s$coeff[var_rm, 4])
+  if(s$coeff[var_rm, 4] < alpha){
+    return("")
+  }
+  
+  print_var_removed(s, var_rm)
+  return(var_rm)
+} 
+
+print_var_removed = function(s, var_removed){
+  print(sprintf("Variable Removed: %s", var_removed) ) 
+  print( sprintf("P value: %f", s$coeff[var_removed, 4] ) )
+  print( sprintf("R^2 before removal: %f", s$r.squared) ) 
+}
+
+```
+
+### Test Backwards Elim
+```{r}
+y = "lpsa"
+alpha = 0.05
+
+vars_backward = backward_elimination(prostate, alpha)
+print("Predictors after backward elim: ")
+print(vars_backward)
+
+df_backward = prostate[, c(vars_backward)]
+mdl_backward = lm(lpsa ~ ., data = df_backward)
+s_backward = summary(mdl_backward)
+print(s_backward)
+```
+
+##c) AIC
+
+$AIC = n log(RSS/n) + 2p$
+There are a total of $2^8 - 1 = 255$ different models. In the function below, we return model with the lowest AIC.
+
+```{r}
+get_best_aic_model = function(df, k = 2){
+  p = ncol(df) 
+  vars = colnames(df)
+  preds = vars[!vars %in% "lpsa"]
+  
+  null = lm(lpsa ~ 1, data = df)
+  lowestAIC = extractAIC(null, k = k)[2]
+  best = null
+  count = 0 
+  for(size in 1:(p-1)){
+    combs = combn(preds, size)
+      for(i in 1:ncol(combs)){
+        tmp_vars = c( combs[, i], "lpsa" )
+        count = count + 1
+        mdl = lm(lpsa ~ ., data = df[,tmp_vars])
+        mdl_aic = extractAIC(mdl, k = k)[2]
+        if(lowestAIC > mdl_aic){
+          lowestAIC = mdl_aic 
+          best = mdl 
+        }
+      }
+  }
+  #print(count)
+  return(best)
+}
+```
+
+```{r}
+mdl_aic = get_best_aic_model(prostate)
+summary(mdl_aic)
+extractAIC(mdl_aic)[2]
+#mdl_aic_step = step(null, scope = formula(full), direction = "forward")
+#extractAIC(mdl_aic_step)
+```
+
+##d) BIC 
+
+$BIC = n log(RSS/n) + plog(n)$
+
+```{r}
+n = nrow(prostate)
+mdl_bic = get_best_aic_model(prostate, k = log(n))
+summary(mdl_bic)
+extractAIC(mdl_bic)[2]
+```
+
+## Comparison 
+
+#2) Splines 
+
+##a) Plot fit 
+
+```{r}
+n = 1000
+x = seq(0, 1, length.out = n) 
+f = function(x){ return( (sin(2 * pi * x))^3 ) } 
+f_x = f(x)
+y = f_x + rnorm(n = n, sd = 0.1)
+plot(y ~ x)
+lines(f_x ~ x, col = "red", lwd = 5) 
+
+b_spline = bs(x, 12)
+mdl_spline = lm(y ~ b_spline)
+lines(mdl_spline$fitted.values ~ x, col = "blue", lwd = 3)
+legend("topright", legend =  c("true = red", "spline fit = blue"))
+```
+
+##b) AIC 
+```{r}
+aic_12 = extractAIC(mdl_spline)[2]
+print( sprintf( "AIC 12 splines: %f", aic_12) )
+```
+
+##c) AIC k = 3 -> 20
+```{r}
+aics = c() 
+knot_sizes = 3:20
+for(k in knot_sizes){
+  b_spline_k = bs(x, k)
+  mdl_spline_k = lm(y ~ b_spline_k)
+  aics = c(aics, extractAIC(mdl_spline_k)[2])
+}
+
+plot(aics ~ knot_sizes, main = "AIC for different sized knots")
+best_knot_size = knot_sizes[ which.min(aics) ] 
+print(sprintf("The best knot size is %d knots", best_knot_size))
+```
+
+The best knot size is k = 16 evenly spaced knots.
+
+##d) Fitting "best" knot
+
+```{r}
+plot(y ~ x, main = "Spline fit, knots = argmin AIC")
+lines(f_x ~ x, col = "red", lwd = 5) 
+
+b_spline_best = bs(x, best_knot_size)
+mdl_spline_best = lm(y ~ b_spline_best)
+lines(mdl_spline_best$fitted.values ~ x, col = "blue", lwd = 3)
+legend("topright", legend =  c("true = red", "spline fit = blue"))
+```
+
+In comparision to part a) with 12 knots, the spline fit that minimizes AIC isn't noticably different. This is also evidenced in the AIC plot - the AIC between 12 and 16 knots is small. 
+
+#3) Climate Data
+
+##a) Linear Trend
+
+```{r}
+data("aatemp")
+plot(temp ~ year, data = aatemp, main = "Temperature vs Year")
+#mdl_raw = lm(temp ~ year, data = aatemp)
+#abline(mdl_raw)
+```
+
+Because the data is so noisy, it's hard to say whether or not there is a linear trend. It looks like temperatures in general are rising up until 1950, but starts to sightly decline after that. 
