@@ -152,7 +152,7 @@ print(s_backward)
 ##c) AIC
 
 $AIC = n log(RSS/n) + 2p$
-There are a total of $2^8 - 1 = 255$ different models. In the function below, we return model with the lowest AIC.
+There are a total of $2^8 - 1 = 255$ different models. In the function below, we return model with the lowest AIC by running all possible models and selecting the one with the lowest AIC.
 
 ```{r}
 get_best_aic_model = function(df, k = 2){
@@ -191,9 +191,7 @@ extractAIC(mdl_aic)[2]
 ```
 
 ##d) BIC 
-
 $BIC = n log(RSS/n) + plog(n)$
-
 ```{r}
 n = nrow(prostate)
 mdl_bic = get_best_aic_model(prostate, k = log(n))
@@ -201,7 +199,15 @@ summary(mdl_bic)
 extractAIC(mdl_bic)[2]
 ```
 
-## Comparison 
+## Comparison
+
+###a) vs b) Forward vs Backward  
+Both the forward selection and the backward elimination give the same model. Typically, I would imagine that forward selection would give a more parsimonious model, which is more preferred. 
+
+###b) vs c) Bacward vs AIC
+The problem with backward elimination is that we might miss the "optimal" model. It's also hard to set a threshold for elimination (since we are performing tests many times). On the other hand, the exhuastive method of AIC ($2^d - 1$) will give us the "optimal" model (in AIC), but it comes at a computation cost. (Backward Selection is much cheaper) 
+###c vs d), AIC vs BIC 
+The primary difference in AIC and BIC is the penalization term on the model complexity. In the SLR case, for instance, AIC has a constant $2$ term multiplied by the dimension of the predictor space, and BIC has the nterm $log(n)$. In short, BIC penalizes the model complexity more --> simpler model. 
 
 #2) Splines 
 
@@ -267,7 +273,6 @@ In comparision to part a) with 12 knots, the spline fit that minimizes AIC isn't
 data("aatemp")
 plot(temp ~ year, data = aatemp, main = "Temperature vs Year")
 mdl_raw = lm(temp ~ year, data = aatemp)
-summary(mdl_raw)
 abline(mdl_raw)
 ```
 
@@ -299,7 +304,8 @@ Because the lag coefficient is also <1, it would look like the temperatures are 
 
 ##c) Backward Elim
 
-Question is a little ambiguous with regards to which predictors we should use polynomial terms on, going to assume its just the year predictor. 
+Question is a little ambiguous with regards to how we should do backward elimination. Should be 1) eliminate the predictor with the highest insiginificant p value (which is how the algorithm is specified in Faraway), or 2) eliminate the predictor with the highest degree provided not all predictors are significant (for interpretibillity). Here, I'll use the former method. Also, note that I subtract min(years) because of integer overflow. 
+
 ```{r}
 backward_elimination_temp = function(df, alpha){
   go = TRUE 
@@ -329,9 +335,21 @@ for(i in polys){
 }
 colnames(tmp_poly) = c("year", "temp", paste0("yearpoly", polys))
 
-mdl_poly = lm(temp ~ . -yearpoly6, data = tmp_poly)
-backward_elimination_temp(tmp_poly, 0.05)
+poly_vars = backward_elimination_temp(tmp_poly, 0.05)
+poly_mdl = lm(temp ~ ., data = tmp_poly[,poly_vars])
 ```
+
+Plot of the polynomial is below. 
+```{r}
+plot(temp ~ year, data = tmp_poly, main = "Polynomial Fit")
+lines(poly_mdl$fitted.values ~ year, data = tmp_poly)
+
+poly_vars
+yr = 2020 - min(aatemp$year)
+year_2020 = data.frame(yearpoly5 = yr^5, yearpoly7 = yr^7, yearpoly8 = yr^8)
+predict(poly_mdl, newdata = year_2020, interval = "prediction")
+```
+The polynomial model (which uses some very high degree terms after backward elim) predicts a 72.60171 average temp for the year 2020. This is apparent by the right tail of the fit in the plot above which seems like its about to explode upwards (Most likely a byproduct of tail bias). 
 
 ##d) 1930 Broken Stick 
 
@@ -340,6 +358,7 @@ Here, we'll use BSR, with the cutoff at 1930. Before 1930, we'll regress with th
 lhs = function(x){ifelse(x < 1930, 1930 - x, 0)}
 rhs = function(x){ifelse(x >= 1930, x - 1930, 0)}
 bsr = lm(temp ~ lhs(year) + rhs(year), data = aatemp)
+summary(bsr)
 
 #g1 = lm(temp ~ 1, aatemp, subset = (year < 1930) ) 
 #g2 = lm(temp ~ year, aatemp, subset = (year >= 1930)) 
@@ -347,15 +366,29 @@ bsr = lm(temp ~ lhs(year) + rhs(year), data = aatemp)
 #summary(g2)
 ```
 
-The negative coefficient does suggest temperatures appear to be decreasing as year increases. However, using a threshold of $\alpha = 0.05$ The Broken Stick Regression doesn't provide enough evidence to reject the null hypothesis $H_0:$ there is no linear trend in temp and year after 1930. 
+The negative coefficient (which is significant at 0.05, but not after using Bonferonni) on the lhs suggests temperatures appear to be decreasing as year increases. This refutes the first claim that temperatures are constant before 1930. The insiginificant coefficent for the rhs suggests that there is no trend after 1930, which refutes the second claim (that there is linear trend after 1930).  
 
 ##e) Spline 
+
+Note: 
+Spline fit - red
+BSR - blue 
+AR1 - black 
+polynomial - green 
+
 ```{r}
 tmp_spline = bs(aatemp$year, 6)
 temp_spline = lm(aatemp$temp ~ tmp_spline)
-plot(temp ~ year, data = aatemp)
+plot(temp ~ year, data = aatemp, main = "Splines, AR1, Poly, BSR")
 lines(temp_spline$fitted.values ~ year, data = aatemp, col = "red")
 lines(bsr$fitted.values ~ year, data = aatemp, col = "blue")
 lines(mdl_lag$fitted.values ~ year, data = tmp_lag_clean)
+lines(poly_mdl$fitted.values ~ year, data = aatemp, col = "green")
 #polynomial backwards 
+
+plot(mdl_raw$residuals)
+
 ```
+
+"Does this model (spline) fit better than the straight-line model?"
+Yes. The linear model does not work as well here because it's hard to assume that we have a linear model (as suggested by the residual plot of the SLR, the residuals seem to have a reationship with x). The spline fit captures this non linearity, has a SSR (sum sq. residuals), and is also smooth (presumably to prevent overfitting)  

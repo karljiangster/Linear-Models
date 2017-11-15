@@ -1,0 +1,110 @@
+---
+title: "Stat 343 HW5"
+author: "Karl Jiang"
+date: "November 13, 2017"
+output: pdf_document
+---
+
+```{r, include = FALSE}
+library(faraway)
+library(alr4)
+library(MASS)
+```
+
+
+#1) Median 
+
+If we can show that $L(\mu)$ is decreasing when $\mu < med(X)$ and is increasing
+when $\mu > med(X)$, then we have shown that (albeit hand wavedly) $\sum_{i = 1}^N |X_i - \mu|$ achieves a minimum at $\hat{\mu} = med(X)$  
+
+First let's use rank order statistics: $X_1 \leq X_2 \leq ... \leq X_N$  In addition, let the points $X_i, ..., X_k < \mu$ be in the set $S$. Then let us express $L(\mu)$ as  
+$$
+\begin{aligned}
+\sum_{i = 1}^N |X_i - \mu| &= \sum_{i = 1}^{k} |X_i - \mu| + \sum_{i = k + 1}^N |X_i - \mu| \\ 
+&= \sum_{i = 1}^{k} \mu - X_i + \sum_{i = k + 1}^N X_i - \mu \\
+&\implies \frac{\partial L}{\partial \mu} = |S| - (N - |S|) = 2|S| - N
+\end{aligned}
+$$
+
+###If $N$ is odd)
+
+Then $N = 2m + 1$ for some integer m and $med(X) = X_m$. 
+
+If $\mu < X_m$, then $|S| < m$, so $2|S| - N < 0 \implies \frac{\partial L}{\partial \mu} < 0$ 
+
+If $\mu > X_m$, then $|S| > m$, so $2|S| - N > 0 \implies \frac{\partial L}{\partial \mu} > 0$ 
+
+###If $N$ is even)
+
+The methodology follows if $N$ is even as well. $N = 2m$ for some integer m and $med(X) = \frac{X_m + X_{m+1}}{2}$, that is, if $\mu < med(X) \implies \mu < \frac{X_m + X_{m+1}}{2}$, we still have that 
+
+$|S| < m \implies 2|S| - N < 0 \implies \frac{\partial L}{\partial \mu} < 0$ 
+
+As well as:
+$\mu > X_m \implies |S| > m$, so $2|S| - N > 0 \implies \frac{\partial L}{\partial \mu} > 0$ 
+
+Therefore, we have shown that if $\mu < med(X)$ $L$ is decreasing. And if $\mu > med(X)$ then $L$ is increasing. 
+
+#2) Ozone 
+
+The log-likelihood plot is shown below, along with the 95% CI for $\lambda$:  
+```{r}
+data("ozone")
+g = lm(O3 ~ temp + humidity + ibh, data = ozone )
+boxcox(g, plotit = T, lambda = seq(0.1, 0.5, by = 0.1) )
+```
+
+For simplicity, we should choose $\hat{\lambda} = \frac{1}{4}$ as it is within the CI without any lingering decimals to aid in interpretabillity. 
+
+#3) Crawl, WLS 
+
+Assuming that we interpret SD as the standard deviation $\sigma_k$ for an individual within temperature group $k$, and independent samples, then the weight of each group: $w_k = \frac{n}{\sigma_k}$  
+
+```{r}
+data("crawl")
+crawl_mdl = lm(crawling ~ temperature, data = crawl, weights = n / SD^2)
+summary(crawl_mdl)
+```
+
+So supposedly higher temperatures will lead to a younger crawling age. 
+
+#4) Pipeline 
+
+##a) Nonconstant Variance
+
+```{r}
+data("pipeline")
+pmdl = lm(Lab ~ Field, data = pipeline)
+plot(pmdl$residuals ~ pmdl$fitted.values, main = "Residual Plot", 
+     ylab = "residuals", xlab = "fitted values")
+```
+
+Unfortunately, we do not have constant variance here. As we increase the Field variable (eg increase $\hat{y}$), so too does the variance. Moreover, there seems to be some diagnonal stretches (from top left to bottom right) several times in the residual plot. 
+
+##b) 
+
+```{r}
+i = order(pipeline$Field)
+npipe = pipeline[i,]
+ff = gl(12,9)[-108]
+meanfield <- unlist(lapply(split(npipe$Field,ff),mean))
+varlab = unlist(lapply(split(npipe$Lab,ff),var))
+```
+Estimate $a_0$ and $a_1$: 
+
+```{r}
+mdl_est = lm( log(varlab) ~ log(meanfield) ) 
+
+a0 = exp( mdl_est$coefficients[1] )
+a1 = mdl_est$coefficients[2]  
+sprintf("a0: %f", a0 )
+sprintf("a1: %f", a1)
+```
+
+Alright. Now let's approximate the weights and use it for a WLS: 
+
+```{r}
+wls_pipe = lm(Lab ~ Field, data = pipeline,  weights = 1 / (a0 * Field^a1) )
+#doesnt matter if we have a0 or not... 
+summary(wls_pipe)
+```

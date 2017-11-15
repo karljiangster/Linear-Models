@@ -1,0 +1,102 @@
+---
+title: "STAT 34300 - PS5"
+author: "Guozhen (Gordon) Ji 10447647"
+header-includes:
+   - \usepackage{amsmath}
+date: "11/10/2017"
+output: pdf_document
+---
+## Question 1
+\subsection{1}
+
+\begin{align*}
+L(\mu)&=\Sigma^n_{i=1}|X_i-\mu|\\
+      &=\Sigma^j_{i=1}\mu-X_i+\Sigma^n_{i=j+1}X_i-\mu \\
+\end{align*}
+\begin{align*}
+L'(\mu)&=j-(n-j)\\
+       &=j-n+j\\
+       &=2j-n
+\end{align*}
+       
+When$\mu < med(X)$, the $med(X)$ is the middle point for odd number n and the mean for the two middle points for even number n. The threshold, j, will be smaller than the middle point.
+
+When n odd:
+\begin{align*}
+j &\leq m-1\\
+  &\leq \frac{n+1} {2}-1\\
+2j&\leq n-1\\
+2j-n-1&\leq 0\\
+ 2j-n &< 0
+\end{align*}
+
+When n even:
+\begin{align*}
+j &\leq m\\
+  &\leq \frac{n} {2}\\
+2j&\leq n\\
+2j-n&\leq 0
+\end{align*}
+
+On the other hand, when $\mu > med(X)$, $j > \frac{n} {2}$ for very similar process but vice versa. 
+
+Thus we can conclude that when $\mu < med(X)$, the derivative is negative and the empirical loss is decreasing through $\mu$, and when $\mu> med(X)$, the derivative is positive and the empirical loss is increasing through $\mu$. Thus the $med(X)$, is indeed the minimum for the empirical loss function. 
+
+
+## Question 2
+```{r}
+library(alr4)
+library(faraway)
+data("ozone")
+library(MASS)
+library(lindia)
+ozonelm=lm(O3~temp+humidity+ibh, data = ozone)
+boxcox(ozonelm, lambda = seq(0.15, 0.4, 1/200), plotit = TRUE,
+       eps = 1/50, xlab = expression(lambda),
+       ylab = "log-Likelihood")
+```
+
+The best $\lambda$ to max the log-likelihood is between 0.25 and 0.30. My best guess would be 0.28. 
+
+## Question 3
+```{r}
+data("crawl")
+wcrawl=lm(crawling~temperature, data = crawl, weights=n)
+summary(wcrawl)
+```
+As each $Y_i$ is the average crawling month of certian numbers of samples, we choose weights to be proportional of $n$. 
+
+## Question 4
+\subsection{a}
+```{r}
+library(ggplot2)
+data("pipeline")
+fitpip=lm(Lab~Field, data=pipeline)
+r=fitpip$residuals
+qplot(pipeline$Field, r,color="red", xlab="Field", ylab="Residue", main="Resiude Plot of Field and Lab", geom=c("line"))+theme(legend.position="none")
+```
+When we check of non-constant variance, we found when field goes up, the residue clearly has a larger standard deviation. 
+
+\subsection{b}
+```{r}
+i <- order(pipeline$Field)
+npipe <- pipeline[i,]
+ff <- gl(12,9)[-108]
+meanfield <- unlist(lapply(split(npipe$Field,ff),mean))
+varlab = unlist(lapply(split(npipe$Lab,ff),var))
+```
+
+```{r}
+pipvarfit=lm(log(varlab)~log(meanfield))
+summary(pipvarfit)
+```
+Thus $log(a_0)=-0.3538$,$a_0=0.7020$ $a_1=1.1244$. We have $var(Lab)=0.7020\times Field^{1.1244}$
+
+
+```{r}
+wpip1=lm(Lab~Field, data=npipe, weights = 1/(Field^pipvarfit$coefficients[2]))
+summary(wpip1)
+```
+
+We choose the weights to be $\frac {1} {Field^{a_1}}$ as weights should be proportional to $\frac {1} {\sigma^2}$, since $\sigma^2=a_0\times Field^{a_1}$, we then choose weight to be $\frac {1} {Field^{a_1}}$. 
+
