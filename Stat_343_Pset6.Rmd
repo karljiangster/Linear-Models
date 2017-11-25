@@ -1,0 +1,136 @@
+---
+title: "Stat 343 PSet 6"
+author: "Karl Jiang"
+date: "November 17, 2017"
+output: pdf_document
+---
+
+```{r, include = FALSE}
+library(alr4)
+library(faraway)
+```
+
+
+#1) MBA Students 
+
+##a) 
+```{r}
+data("happy")
+mdl_happy = lm(happy ~ ., data = happy)
+summary(mdl_happy)
+```
+
+Without correcting for the FWER, using $\alpha = 0.01$ the only significant predictor is "love". 
+
+##b) "Questionable"
+
+
+```{r}
+table(happy$happy)
+```
+
+To perform t tests, we assume that the errors are normally distributed (continous values on support $[-\infty, \infty]$ with constant variance $\sigma^2$. Because the response is a discrete, there's no way the errors can be normally distributed. 
+
+##c) Permutation Money 
+
+
+```{r, cache = TRUE}
+n_iter = 1000
+money_coeffs = c() 
+for(i in 1:n_iter){
+  mdl_tmp = lm(happy ~ . -money + sample(money), data = happy)
+  s = summary(mdl_tmp)
+  money_coeffs = c(money_coeffs, s$coefficients["sample(money)", "t value"] )
+}
+
+hist(money_coeffs, probability = TRUE, main = "Money T Stat Permutations")
+
+#Compute the perumtated p value
+t_money = summary(mdl_happy)$coeff["money", "t value"]
+sprintf("the two sided p value is: %f", mean(abs(money_coeffs) > t_money))
+```
+
+##d) Density over Histogram 
+
+```{r}
+grid = seq(-4, 4, length = 3000)
+t_vals = dt(grid, df = mdl_happy$df.residual)
+hist(money_coeffs, probability = TRUE, main = "Money T Stat Permutations")
+lines(t_vals ~ grid, type = "l")
+```
+
+
+##e) Bootstrap 
+
+```{r, cache = TRUE}
+res = mdl_happy$residuals
+y_est = mdl_happy$fitted.values
+
+b_money = summary(mdl_happy)$coeff["money", "Estimate"]
+
+B = 5000
+boot_money = c()
+for(i in 1:B){
+  e_star = res[sample(length(res), replace = T)]
+  ynew = y_est + e_star
+  mdl_tmp_s = summary(lm(ynew ~ ., data = happy))
+  b_money = c(b_money, mdl_tmp_s$coefficients["money", "Estimate"])
+}
+```
+
+```{r}
+#CI 
+#hist(b_money)
+print("95 Boostrap CI: " )
+print( quantile(b_money,c(0.025,0.975)) ) 
+
+print("90% Bootstrap CI: ")
+print( quantile(b_money,c(0.05,0.95)) ) 
+```
+
+As we can see, 0 does not fall in the $1 - \alpha = 95\%$ confidence interval. However, 0 does fall within the 90% confidence interval. This is consistent with the p value from the vanilla MLR, which is significant at the $\alpha = 0.1$ level (eg. 0 not in 90% CI), but not at the $\alpha = 0.05$ level. 
+
+#2) ToothGrowth, Factor levels
+
+(Text book, Chapter 14, Problem 3) Plot the ToothGrowth data with len as
+the response. Fit a linear model to the data and check for possible simplification.
+Display the fitted regression lines on top of the data.
+
+
+Since the predictor supp is binary, we shall display two plots for each category (OJ and VC) along the values of dose. Because there are only 3 unique values of dosage levels, we should treat this as a categorical. However, looking at the fit below (using interaction term between dosage and supp), a possible simplication - treating dosage as continuous, could be possible here, as each unit increase in dosage seems to correspond to a linear change in length. 
+
+```{r}
+data("ToothGrowth")
+#summary(ToothGrowth)
+
+#lm
+mdl_t = lm(len ~ . + supp * dose, data = ToothGrowth)
+summary(mdl_t)
+
+tj_oj = ToothGrowth[ToothGrowth$supp == "OJ", ]
+tj_vc = ToothGrowth[ToothGrowth$supp == "VC", ]
+
+fit_oj = predict(mdl_t, newdata = tj_oj)
+fit_vc = predict(mdl_t, newdata = tj_vc)
+#seperate 
+plot(len ~ dose, data = ToothGrowth, subset = supp == "OJ", col = "red", 
+     main = "OJ")
+lines(fit_oj ~ tj_oj$dose )
+
+plot(len ~ dose, data = ToothGrowth, subset = supp == "VC", col = "red", 
+     main = "VC")
+lines(fit_vc ~ tj_vc$dose )
+```
+
+```{r}
+#together 
+plot(len ~ dose, data = ToothGrowth, subset = supp == "OJ", col = "red", 
+     main = "Red = OJ, Blue = VC")
+points(len ~ dose, data = ToothGrowth, subset = supp == "VC", pch = 5, col = "blue")
+lines(fit_oj ~ tj_oj$dose )
+lines(fit_vc ~ tj_vc$dose )
+```
+
+Both fits (on OJ and VC) treating dosage as a continuos variable seem to fit the data quite well (Solid $R^2$ and significant predictor in dosage treated as a continuos variable). 
+
+Moreover, to further test if we can do this simplication, we can do a hypothesis test. With $\beta_{dosage = 0.5}$ as the default, our null is $H_0: \beta_{dosage = 1} = 2\beta_{dosage = 2}$, which suggests that the change is linear in dosage (at least to 1.0 and 2.0, not actually a conclusive test). 
